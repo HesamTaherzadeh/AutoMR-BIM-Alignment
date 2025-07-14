@@ -1,0 +1,43 @@
+# Style options for clang-format
+
+BasedOnStyle: Google
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+BreakBeforeBraces: Allman  # PCL/Eigen/ROS style - braces on new line
+AllowShortFunctionsOnASingleLine: Empty  # Allow empty {} inline
+ColumnLimit: 100  # Wider limit since point cloud data often involves long lines
+SpacesInAngles: false
+SpaceAfterCStyleCast: true
+
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+
+SortIncludes: true
+IncludeBlocks: Merge
+IncludeCategories:
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^".*'
+    Priority: 2
+  - Regex: '.*'
+    Priority: 3
+
+PointerAlignment: Left  # 'Type* ptr' style, ROS and PCL convention
+SpaceBeforeParens: ControlStatements  # if(), while() have space; functions don't
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+
+NamespaceIndentation: All  # Indent inside namespace
+
+ReflowComments: true
+CommentPragmas: '^ IWYU pragma:'
+FixNamespaceComments: true
+
+# Eigen-friendly formatting
+AlignOperands: true
+AllowAllParametersOfDeclarationOnNextLine: true
+PenaltyBreakAssignment: 50
+PenaltyBreakBeforeFirstCallParameter: 30
+

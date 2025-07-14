@@ -1,0 +1,5 @@
+tile_size: 10.0
+sectors: 60
+rings: 20
+max_length: 80.0
+kdtree_leaf_size: 10
