@@ -18,16 +18,13 @@ float deg2rad(float degrees)
     return degrees * M_PI / 180.0;
 }
 
-float xy2theta(const float& _x, const float& _y)
-{
-    if (_x >= 0 & _y >= 0) return (180 / M_PI) * atan(_y / _x);
+float xy2theta(const float& _x, const float& _y) {
+    if (_x == 0.0f && _y == 0.0f) return 0.0f;  
+    float theta = atan2(_y, _x) * 180.0 / M_PI;
+    if (theta < 0) theta += 360.0;
+    return theta;
+}
 
-    if (_x < 0 & _y >= 0) return 180 - ((180 / M_PI) * atan(_y / (-_x)));
-
-    if (_x < 0 & _y < 0) return 180 + ((180 / M_PI) * atan(_y / _x));
-
-    if (_x >= 0 & _y < 0) return 360 - ((180 / M_PI) * atan((-_y) / _x));
-}  // xy2theta
 
 MatrixXd circshift(MatrixXd& _mat, int _num_shift)
 {
@@ -66,7 +63,7 @@ double SCManager::distDirectSC(MatrixXd& _sc1, MatrixXd& _sc2)
         VectorXd col_sc1 = _sc1.col(col_idx);
         VectorXd col_sc2 = _sc2.col(col_idx);
 
-        if (col_sc1.norm() == 0 | col_sc2.norm() == 0) continue;  // don't count this sector pair.
+        if (col_sc1.norm() == 0 || col_sc2.norm() == 0) continue; 
 
         double sector_similarity = col_sc1.dot(col_sc2) / (col_sc1.norm() * col_sc2.norm());
 
@@ -139,49 +136,49 @@ MatrixXd SCManager::makeScancontext(pcl::PointCloud<SCPointType>& _scan_down)
 {
     TicToc t_making_desc;
 
-    int num_pts_scan_down = _scan_down.points.size();
-
-    // main
+    const int rows = PC_NUM_RING;
+    const int cols = PC_NUM_SECTOR;
     const int NO_POINT = -1000;
-    MatrixXd  desc     = NO_POINT * MatrixXd::Ones(PC_NUM_RING, PC_NUM_SECTOR);
 
-    SCPointType pt;
-    float       azim_angle, azim_range;  // wihtin 2d plane
-    int         ring_idx, sctor_idx;
-    for (int pt_idx = 0; pt_idx < num_pts_scan_down; pt_idx++)
+    MatrixXd desc = NO_POINT * MatrixXd::Ones(rows, cols);
+
+    const double inv_ring_gap   = 1.0 / PC_UNIT_RINGGAP;        // pre-inverse for speed
+    const double inv_sector_deg = 1.0 / PC_UNIT_SECTORANGLE;    //  = PC_NUM_SECTOR / 360.0
+
+    for (const auto& p : _scan_down.points)
     {
-        pt.x = _scan_down.points[pt_idx].x;
-        pt.y = _scan_down.points[pt_idx].y;
-        pt.z = _scan_down.points[pt_idx].z +
-               LIDAR_HEIGHT;  // naive adding is ok (all points should be > 0).
+        // translate height
+        double z = p.z + LIDAR_HEIGHT;
 
-        // xyz to ring, sector
-        azim_range = sqrt(pt.x * pt.x + pt.y * pt.y);
-        azim_angle = xy2theta(pt.x, pt.y);
+        // radial distance in XY
+        double r_xy = std::hypot(p.x, p.y);
+        if (r_xy > PC_MAX_RADIUS) continue;                      // outside ROI
 
-        // if range is out of roi, pass
-        if (azim_range > PC_MAX_RADIUS) continue;
+        // ring index (0 … rows-1)
+        int ring_idx = static_cast<int>(r_xy * inv_ring_gap);
+        ring_idx = std::min(ring_idx, rows - 1);
 
-        ring_idx = std::max(
-            std::min(PC_NUM_RING, int(ceil((azim_range / PC_MAX_RADIUS) * PC_NUM_RING))), 1);
-        sctor_idx = std::max(
-            std::min(PC_NUM_SECTOR, int(ceil((azim_angle / 360.0) * PC_NUM_SECTOR))), 1);
+        // sector index (0 … cols-1)
+        double azim_deg = xy2theta(p.x, p.y);                    // 0 – 360
+        int sctr_idx    = static_cast<int>(azim_deg * inv_sector_deg);
+        sctr_idx        = std::min(sctr_idx, cols - 1);
 
-        // taking maximum z
-        if (desc(ring_idx - 1, sctor_idx - 1) < pt.z)  // -1 means cpp starts from 0
-            desc(ring_idx - 1,
-                 sctor_idx - 1) = pt.z;  // update for taking maximum value at that bin
+        // defensive runtime check (will be compiled out in Release)
+        assert(ring_idx >= 0 && ring_idx < rows);
+        assert(sctr_idx >= 0 && sctr_idx < cols);
+
+        // keep maximum height
+        if (desc(ring_idx, sctr_idx) < z)
+            desc(ring_idx, sctr_idx) = z;
     }
 
-    // reset no points to zero (for cosine dist later)
-    for (int row_idx = 0; row_idx < desc.rows(); row_idx++)
-        for (int col_idx = 0; col_idx < desc.cols(); col_idx++)
-            if (desc(row_idx, col_idx) == NO_POINT) desc(row_idx, col_idx) = 0;
+    // replace NO_POINT with 0
+    desc = (desc.array() == NO_POINT).select(0.0, desc);
 
-    t_making_desc.toc("PolarContext making");
-
+    t_making_desc.toc("ScanContext built");
     return desc;
-}  // SCManager::makeScancontext
+}
+  // SCManager::makeScancontext
 
 MatrixXd SCManager::makeRingkeyFromScancontext(Eigen::MatrixXd& _desc)
 {

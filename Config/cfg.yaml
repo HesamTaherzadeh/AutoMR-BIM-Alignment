@@ -1,5 +1,7 @@
-tile_size: 10.0
-sectors: 60
-rings: 20
-max_length: 80.0
-kdtree_leaf_size: 10
+sectors: 60          # int
+rings: 20            # int
+kdtree_leaf_size: 10 # int
+num_candidates: 10   # int
+dist_threshold: 0.35 # float
+tile_size: 10.0       # float
+max_length: 80.0     # float
